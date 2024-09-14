@@ -50,6 +50,9 @@ declare module '@tanstack/react-router' {
       parentRoute: typeof rootRoute
     }
   }
+  interface HistoryState {
+    activeCompanyId?: string
+  }
 }
 
 // Create and export the route tree
