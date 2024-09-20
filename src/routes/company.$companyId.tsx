@@ -1,60 +1,107 @@
-import { useEffect } from 'react'
-import { getCompanyTree } from '@/lib/api/company.api'
-import { TreeView, TreeDataItem } from '@/components/tree-view'
-import useAssetsStore from '@/stores/assets.store'
-import useLocationStore from '@/stores/locations.store'
-import { createFileRoute } from '@tanstack/react-router'
-import { AssetHeader } from '@/components/assetHeader'
+import { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
+import { FormProvider, useForm } from "react-hook-form";
 
-const data: TreeDataItem[] = [
-  {
-    id: '1',
-    name: 'Item 1',
-    children: [
-      {
-        id: '2',
-        name: 'Item 1.1',
-        children: [
-          {
-            id: '3',
-            name: 'Item 1.1.1',
-          },
-          {
-            id: '4',
-            name: 'Item 1.1.2',
-          },
-        ],
-      },
-      {
-        id: '5',
-        name: 'Item 1.2',
-      },
-    ],
-  },
-  {
-    id: '6',
-    name: 'Item 2',
-  },
-];
+import { useShallow } from "zustand/react/shallow";
+import { z } from "zod";
 
-export const Route = createFileRoute('/company/$companyId')({
-  loader: ({ params }) => getCompanyTree({ id: params.companyId }),
-  component: CompanyComponent,
-})
+import { createFileRoute } from "@tanstack/react-router";
+import { zodResolver } from "@hookform/resolvers/zod";
 
-function CompanyComponent() {
-  const { locations, assets } = Route.useLoaderData()
-  const setLocations = useLocationStore(state => state.setLocations)
-  const setAssets = useAssetsStore(state => state.setAssets)
+import { getCompanyTreeItems } from "@/lib/api/company.api";
+import { transformCompanyItemsToArray } from "@/lib/utils";
+import { CompanyBoardHeader } from "@/components/company-view";
+import { CompanyBoardTree } from "@/components/company-tree";
+import useCompanyTree, {
+  CompanyTreeDataItem,
+} from "@/stores/company-tree.store";
+
+export const FilterSchema = z.object({
+  treeItemName: z.union([z.string().min(1), z.literal("")]),
+  onlyCritical: z.boolean(),
+  onlyEnergy: z.boolean(),
+});
+
+export const Route = createFileRoute("/company/$companyId")({
+  loader: ({ params }) => getCompanyTreeItems({ id: params.companyId }),
+  pendingComponent: OnPendingComponent,
+  component: CompanyBoardComponent,
+});
+
+function CompanyBoardComponent() {
+  const companyTree = Route.useLoaderData();
+  const { companyId } = Route.useParams();
+
+  const methods = useForm<z.infer<typeof FilterSchema>>({
+    resolver: zodResolver(FilterSchema),
+    defaultValues: {
+      treeItemName: "",
+      onlyCritical: false,
+      onlyEnergy: false,
+    },
+  });
+
+  const [setCompanyTree, filterBy, tree] = useCompanyTree(
+    useShallow((state) => [
+      state.setCompanyTree,
+      state.filterBy,
+      state.filteredTree,
+    ])
+  );
+  const treeItems: CompanyTreeDataItem[] = useMemo(
+    () => transformCompanyItemsToArray(tree.get(companyId) ?? new Map()),
+    [tree, companyId]
+  );
+
+  const onValid = useCallback(
+    (data: z.infer<typeof FilterSchema>) => {
+      filterBy(companyId, data);
+    },
+    [companyId, filterBy]
+  );
+
+  useLayoutEffect(() => {
+    if (!companyTree) return;
+
+    setCompanyTree(companyId, companyTree);
+  }, [companyTree, companyId, setCompanyTree]);
 
   useEffect(() => {
-    setLocations(locations)
-    setAssets(assets)
-  }, [locations, assets, setLocations, setAssets])
+    const { unsubscribe } = methods.watch((value) => {
+      console.log(FilterSchema.parse(value));
+      onValid(FilterSchema.parse(value));
+    });
+
+    return () => unsubscribe();
+  }, [methods, onValid]);
 
   return (
-    <>
-      <TreeView data={data} />
-    </>
-  )
+    <FormProvider {...methods}>
+      <form className="flex flex-col gap-2 flex-shrink-0 flex-grow-0 h-full">
+        <CompanyBoardHeader companyId={companyId} />
+        <CompanyBoardTree items={treeItems} />
+      </form>
+    </FormProvider>
+  );
+}
+
+function OnPendingComponent() {
+  const { companyId } = Route.useParams();
+
+  const methods = useForm<z.infer<typeof FilterSchema>>({
+    resolver: zodResolver(FilterSchema),
+    defaultValues: {
+      treeItemName: "",
+      onlyCritical: false,
+      onlyEnergy: false,
+    },
+  });
+
+  return (
+    <FormProvider {...methods}>
+      <form className="flex flex-col gap-2 lex-shrink-0 flex-grow-0 h-full">
+        <CompanyBoardHeader companyId={companyId} />
+        <CompanyBoardTree loading />
+      </form>
+    </FormProvider>
+  );
 }

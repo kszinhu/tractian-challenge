@@ -1,15 +1,11 @@
+import { Component, SensorType, StatusKind } from "./component.model";
 import { Location } from "./location.model";
-
-type sensorType = "energy" | "vibration";
-type StatusKind = "operating" | "alert";
 
 export interface Asset {
   id: string;
   name: string;
+  parentId: null | Component["id"] | Location["id"];
   locationId: null | Location["id"];
-  parentId: null | Asset["id"];
-  sensorType: null | sensorType;
+  sensorType: null | SensorType;
   status: null | StatusKind;
-  sensorId?: string;
-  gatewayId?: string;
 }

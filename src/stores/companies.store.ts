@@ -1,6 +1,7 @@
-import { Company } from "@/lib/models/company.model";
 import { create } from "zustand";
 import { mutative } from "zustand-mutative";
+
+import { Company } from "@/lib/models/company.model";
 
 export interface CompanyState {
   companies: Map<Company["id"], Company>;
